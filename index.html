@@ -1,3 +1,6 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sound Builder</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -101,7 +104,7 @@ h1, h2, h3, p { margin: 0; }
 .empty { color: var(--muted); font-size: 18px; }
 .slot { position: relative; font-family: var(--font-en); font-weight: 800; font-size: clamp(44px, 9vw, 76px); line-height: 1; padding: 14px 20px 18px; border-radius: 20px; border: 3px solid; min-width: 78px; text-align: center; }
 .slot.silent { opacity: .62; }
-.slot .x { position: absolute; top: -10px; right: -10px; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--line); background: var(--surface); color: var(--muted); font-size: 14px; line-height: 1; padding: 0; display: grid; place-items: center; }
+.x { position: absolute; top: -10px; right: -10px; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--line); background: var(--surface); color: var(--muted); font-size: 14px; line-height: 1; padding: 0; display: grid; place-items: center; }
 .cons { background: var(--cons-bg); color: var(--cons-fg); border-color: var(--cons-line); }
 .vowel { background: var(--vow-bg); color: var(--vow-fg); border-color: var(--vow-line); }
 .chunk { background: var(--chunk-bg); color: var(--chunk-fg); border-color: var(--chunk-line); }
@@ -145,6 +148,10 @@ h1, h2, h3, p { margin: 0; }
 .chk b { font-family: var(--font-en); font-size: 22px; line-height: 1.1; }
 .chk small { display: block; font-size: 11px; color: var(--muted); line-height: 1.2; }
 .chk.none { opacity: .6; border-style: dashed; }
+.note-rec { text-align: center; font-size: 13px; color: var(--muted); margin-top: -8px; }
+.btn.recording { background: #d8453a; border-color: #d8453a; color: #fff; animation: rec 1s ease-in-out infinite; }
+@keyframes rec { 50% { opacity: .7; } }
+@media (prefers-reduced-motion: reduce) { .btn.recording { animation: none; } }
 .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 .legend i { display: inline-block; width: 14px; height: 14px; border-radius: 5px; border: 2px solid; vertical-align: -2px; margin-right: 4px; }
 
@@ -191,6 +198,12 @@ h1, h2, h3, p { margin: 0; }
         <button class="btn" type="button" id="btnUndo">1つ消す</button>
         <button class="btn" type="button" id="btnClear">やり直す</button>
       </div>
+
+      <div class="actions rec">
+        <button class="btn" type="button" id="btnRec">🎙 録音する</button>
+        <button class="btn" type="button" id="btnMine" disabled>▶ 自分の声を聞く</button>
+      </div>
+      <p class="note-rec">お手本を聞いてから、自分の声を録音して聞きくらべよう。録音はこの端末の中だけで、保存も送信もされません。</p>
 
       <div class="fb" id="fb" role="status" aria-live="polite"></div>
 
@@ -284,12 +297,13 @@ const partsKey = w => w.parts.map(p => p[0]).join('|');
 /* ===== 音の再生 ===== */
 function setBusy(b) {
   busy = b;
-  ['btnSeq', 'btnListen', 'btnRead'].forEach(id => { const el = $(id); if (el) el.disabled = b; });
+  recUI();
 }
 function stopAll() {
   token++;
   if (curAudio) { try { curAudio.pause(); } catch (e) {} curAudio = null; }
   if (curSrc) { try { curSrc.stop(); } catch (e) {} curSrc = null; }
+  if (recAudio) { try { recAudio.pause(); } catch (e) {} }
   try { window.speechSynthesis && speechSynthesis.cancel(); } catch (e) {}
   setBusy(false);
 }
@@ -334,7 +348,7 @@ async function playClip(id) {
 }
 function notice(msg) { const t = $('toast'); t.textContent = msg; t.className = 'fb show'; clearTimeout(notice.t); notice.t = setTimeout(() => { t.className = 'fb'; }, 6000); }
 async function playIds(ids) {
-  if (busy) return [];
+  if (busy || recording) return [];
   const t = ++token;
   setBusy(true);
   const missing = [];
@@ -525,6 +539,47 @@ function say(type, msg, append) {
   fb.textContent = msg;
 }
 function clearFb() { const fb = $('fb'); fb.className = 'fb'; fb.textContent = ''; }
+
+/* ===== 自分の声を録音して聞きくらべる（端末の中だけ。保存・送信しない） ===== */
+let recorder = null, recUrl = null, recAudio = null, recording = false, recTimer = null;
+function recUI() {
+  const r = $('btnRec'); if (!r) return;
+  r.textContent = recording ? '■ 録音を止める' : '🎙 録音する';
+  r.className = 'btn' + (recording ? ' recording' : '');
+  $('btnMine').disabled = recording || !recUrl;
+  ['btnSeq', 'btnRead'].forEach(id => { $(id).disabled = busy || recording; });
+}
+function stopRec() { clearTimeout(recTimer); try { recorder && recorder.state !== 'inactive' && recorder.stop(); } catch (e) {} }
+async function toggleRec() {
+  if (recording) { stopRec(); return; }
+  if (!navigator.mediaDevices || !window.MediaRecorder) { notice('この端末では録音が使えません。'); return; }
+  stopAll();
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const chunks = [];
+    recorder = new MediaRecorder(st);
+    recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = () => {
+      st.getTracks().forEach(t => t.stop());
+      recording = false;
+      if (chunks.length) { if (recUrl) URL.revokeObjectURL(recUrl); recUrl = URL.createObjectURL(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })); }
+      recUI();
+    };
+    recorder.start();
+    recording = true; recUI();
+    recTimer = setTimeout(stopRec, 8000);
+  } catch (e) {
+    recording = false; recUI();
+    notice(e && e.name === 'NotAllowedError' ? 'マイクが許可されていません。アドレスバーのマイクの設定から、許可してください。' : '録音を始められませんでした。マイクがつながっているか確かめてください。');
+  }
+}
+$('btnRec').addEventListener('click', toggleRec);
+$('btnMine').addEventListener('click', () => {
+  if (!recUrl) return;
+  stopAll();
+  recAudio = new Audio(recUrl);
+  recAudio.play().catch(() => notice('自分の声を再生できませんでした。'));
+});
 
 /* ===== 起動 ===== */
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { tileSet = t.dataset.set; store.set('sb.set', tileSet); render(); }));
