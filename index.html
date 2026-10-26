@@ -224,7 +224,7 @@ const SOUND_BANK = /*SOUND_BANK_START*/{"a":"data:audio/mpeg;base64,SUQzBAAAAAAA
 /* ===== データ ===== */
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('');
 const CHUNKS = ['sh','ch','th','ck','ng','ai','ay','ee','ea','igh','oa','oo','ar','or','er','ir','ur','ow','oi','oy','ou','ue'];
-const ALIAS = { ck: 'k', er: 'ir', oy: 'oi', ue: 'oo_long', q: 'qu' };       // 同じ音として扱う文字
+const ALIAS = { ck: 'k', er: 'ir', oy: 'oi', ue: 'oo_long', q: 'qu', a_long: 'ai', i_long: 'igh', o_long: 'oa', u_long: 'oo_long' }; // サイレントe の「のばす音」は、同じ音の oa・ai・igh・oo で代用       // 同じ音として扱う文字
 const AMBIG = { th: ['th_soft','th_hard'], oo: ['oo_long','oo_short'], ow: ['ow_1','ow_2'] }; // 音が2つあるまとまり
 const SHORT = { th_soft: '息だけ', th_hard: '声あり', oo_long: 'のばす', oo_short: 'みじかい', ow_1: 'アウ', ow_2: 'オウ' };
 const SOUND_LABEL = {
