@@ -148,7 +148,6 @@ h1, h2, h3, p { margin: 0; }
 .chk b { font-family: var(--font-en); font-size: 22px; line-height: 1.1; }
 .chk small { display: block; font-size: 11px; color: var(--muted); line-height: 1.2; }
 .chk.none { opacity: .6; border-style: dashed; }
-.note-rec { text-align: center; font-size: 13px; color: var(--muted); margin-top: -8px; }
 .btn.recording { background: #d8453a; border-color: #d8453a; color: #fff; animation: rec 1s ease-in-out infinite; }
 @keyframes rec { 50% { opacity: .7; } }
 @media (prefers-reduced-motion: reduce) { .btn.recording { animation: none; } }
@@ -205,10 +204,7 @@ h1, h2, h3, p { margin: 0; }
 
       <div class="actions rec">
         <button class="btn" type="button" id="btnRec">🎙 録音する</button>
-        <button class="btn" type="button" id="btnMine" disabled>▶ 自分の声を聞く</button>
-        <button class="btn" type="button" id="btnSay">🗣 言ってみる（文字おこし）</button>
       </div>
-      <p class="note-rec">「録音する」は、この端末の中だけで、保存も送信もされません。<br>「言ってみる」は、Chromeの音声認識（Google）で、言ったことばを文字にします。このときだけ、声がインターネットを通じて Google に送られます（このアプリには保存しません）。</p>
       <div class="sayres" id="sayRes" role="status" aria-live="polite" hidden></div>
 
       <div class="fb" id="fb" role="status" aria-live="polite"></div>
@@ -354,7 +350,7 @@ async function playClip(id) {
 }
 function notice(msg) { const t = $('toast'); t.textContent = msg; t.className = 'fb show'; clearTimeout(notice.t); notice.t = setTimeout(() => { t.className = 'fb'; }, 6000); }
 async function playIds(ids) {
-  if (busy || recording || listening) return [];
+  if (busy || recording) return [];
   const t = ++token;
   setBusy(true);
   const missing = [];
@@ -505,37 +501,7 @@ $('btnRead').addEventListener('click', () => {
 $('btnUndo').addEventListener('click', () => { chosen.pop(); cv.pop(); renderSlots(); autoCheck(); });
 $('btnClear').addEventListener('click', () => { stopAll(); chosen = []; cv = []; clearFb(); renderSlots(); });
 
-function autoCheck() {
-  if (view !== 'free') { clearFb(); return; }
-  const w = WORDS.find(x => x.w === chosen.join(''));
-  if (w) showCorrect(w, true); else clearFb();
-}
-function showCorrect(w, withSplitHint) {
-  const fb = $('fb'); fb.className = 'fb show ok'; fb.innerHTML = '';
-  const mk = (cls, txt) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; fb.appendChild(d); return d; };
-  mk('head', 'この単語、登録されているよ！');
-  mk('big', w.w);
-  mk('head', w.ja);
-  const parts = document.createElement('div'); parts.className = 'parts';
-  w.parts.forEach(p => { const s = document.createElement('span'); s.className = kind(p[0]); s.textContent = p[0]; parts.appendChild(s); });
-  fb.appendChild(parts);
-  mk('sub', '発音の目安（アメリカ英語）：/' + w.ipa + '/　　' + w.rule);
-  if (withSplitHint && partsKey(w) !== chosen.join('|')) mk('sub', 'ヒント：このことばは「' + w.parts.map(p => p[0]).join(' ・ ') + '」と区切ると、音にぴったり合います。');
-  const row = document.createElement('div'); row.className = 'row';
-  const b1 = document.createElement('button'); b1.type = 'button'; b1.className = 'btn small sound'; b1.textContent = '🔊 ことばを聞く';
-  b1.addEventListener('click', () => speak(w.w));
-  const b2 = document.createElement('button'); b2.type = 'button'; b2.className = 'btn small'; b2.textContent = '▶ 音をつなげる';
-  b2.addEventListener('click', async () => {
-    const ids = w.parts.map(p => ALIAS[p[1]] || p[1]).filter(x => x !== 'silent');
-    const missing = await playIds(ids.filter(has));
-    if (ids.some(x => !has(x)) || missing.length) say('info', '音の素材がまだ入っていない音があります。', true);
-  });
-  row.appendChild(b1); row.appendChild(b2);
-  const b3 = document.createElement('button'); b3.type = 'button'; b3.className = 'btn small primary'; b3.textContent = 'もう一度つくる';
-  b3.addEventListener('click', () => { stopAll(); chosen = []; cv = []; clearFb(); renderSlots(); });
-  row.appendChild(b3);
-  fb.appendChild(row);
-}
+function autoCheck() { clearFb(); }
 function say(type, msg, append) {
   const fb = $('fb');
   if (append && fb.classList.contains('show')) {
@@ -546,82 +512,76 @@ function say(type, msg, append) {
 }
 function clearFb() { const fb = $('fb'); fb.className = 'fb'; fb.textContent = ''; }
 
-/* ===== 自分の声を録音して聞きくらべる（端末の中だけ。保存・送信しない） ===== */
-let listening = false, sayRec = null, recorder = null, recUrl = null, recAudio = null, recording = false, recTimer = null;
+/* ===== 録音する：自分の声を録音しながら、Chrome の音声認識で文字おこしも行う ===== */
+let recording = false, recorder = null, recUrl = null, recAudio = null, recTimer = null, sayRec = null;
+let recDone = true, srDone = true, srOut = null, recTarget = '';
 function recUI() {
   const r = $('btnRec'); if (!r) return;
-  r.textContent = recording ? '■ 録音を止める' : '🎙 録音する';
+  r.textContent = recording ? '■ 止める' : '🎙 録音する';
   r.className = 'btn' + (recording ? ' recording' : '');
-  $('btnMine').disabled = recording || listening || !recUrl;
-  $('btnRec').disabled = listening;
-  $('btnSay').disabled = recording;
-  $('btnSay').textContent = listening ? '■ 聞いています…' : '🗣 言ってみる（文字おこし）';
-  ['btnSeq', 'btnRead'].forEach(id => { $(id).disabled = busy || recording || listening; });
+  ['btnSeq', 'btnRead'].forEach(id => { $(id).disabled = busy || recording; });
 }
-function stopRec() { clearTimeout(recTimer); try { recorder && recorder.state !== 'inactive' && recorder.stop(); } catch (e) {} }
-async function toggleRec() {
-  if (recording) { stopRec(); return; }
-  if (!navigator.mediaDevices || !window.MediaRecorder) { notice('この端末では録音が使えません。'); return; }
-  stopAll();
-  try {
-    const st = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const chunks = [];
-    recorder = new MediaRecorder(st);
-    recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-    recorder.onstop = () => {
-      st.getTracks().forEach(t => t.stop());
-      recording = false;
-      if (chunks.length) { if (recUrl) URL.revokeObjectURL(recUrl); recUrl = URL.createObjectURL(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })); }
-      recUI();
-    };
-    recorder.start();
-    recording = true; recUI();
-    recTimer = setTimeout(stopRec, 8000);
-  } catch (e) {
-    recording = false; recUI();
-    notice(e && e.name === 'NotAllowedError' ? 'マイクが許可されていません。アドレスバーのマイクの設定から、許可してください。' : '録音を始められませんでした。マイクがつながっているか確かめてください。');
-  }
-}
-$('btnRec').addEventListener('click', toggleRec);
-$('btnMine').addEventListener('click', () => {
-  if (!recUrl) return;
-  stopAll();
-  recAudio = new Audio(recUrl);
-  recAudio.play().catch(() => notice('自分の声を再生できませんでした。'));
-});
-
-/* ===== 言ってみる（Chrome の音声認識で文字おこし。判定ではなく「聞こえたことば」を見せる） ===== */
 function showSay(cls, head, big, sub) {
   const r = $('sayRes'); r.hidden = false; r.className = 'sayres' + (cls ? ' ' + cls : ''); r.innerHTML = '';
   [[head, ''], [big, 'big'], [sub, '']].forEach(([t, c]) => { if (!t) return; const d = document.createElement('div'); if (c) d.className = c; d.textContent = t; r.appendChild(d); });
+  if (recUrl) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn small'; b.textContent = '▶ 自分の声';
+    b.addEventListener('click', () => { stopAll(); recAudio = new Audio(recUrl); recAudio.play().catch(() => notice('自分の声を再生できませんでした。')); });
+    r.appendChild(b);
+  }
 }
-function sayTest() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { notice('この端末では、文字おこしが使えません。Chrome で開いてね。'); return; }
-  if (listening) { try { sayRec && sayRec.stop(); } catch (e) {} return; }
+function showResult() {
+  const t = recTarget, o = srOut;
+  if (!o) { showSay('', '録音できたよ', '', 'お手本とくらべて聞いてみよう'); return; }
+  if (o.err) {
+    const m = { 'not-allowed': 'マイクが許可されていません。アドレスバーのマイクの設定から、許可してね。', 'service-not-allowed': 'この画面では、文字おこしが使えません。', 'no-speech': '声が聞こえなかったよ。もう一度、少し大きな声で言ってみよう。', 'network': 'インターネットにつながっていないので、文字おこしができません。', 'audio-capture': 'マイクがつながっているか、確かめてね。' };
+    showSay('', m[o.err] || 'うまく聞き取れませんでした。もう一度やってみよう。', '', ''); return;
+  }
+  if (!o.alts.length) { showSay('', '声が聞こえなかったよ。もう一度、言ってみよう。', '', ''); return; }
+  const hit = o.alts.some(a => a.replace(/\s/g, '') === t);
+  if (hit) showSay('ok', '✨ 聞き取れたよ！', t, '');
+  else showSay('', '聞き取れたのは、こちらだったよ', o.alts[0], 'おてほんをもう一度聞いて、言ってみよう');
+}
+function maybeShow() { if (recDone && srDone) showResult(); }
+function stopRec() {
+  clearTimeout(recTimer);
+  try { sayRec && sayRec.stop(); } catch (e) {}
+  try { recorder && recorder.state !== 'inactive' && recorder.stop(); } catch (e) {}
+}
+async function toggleRec() {
+  if (recording) { stopRec(); return; }
+  if (!navigator.mediaDevices || !window.MediaRecorder) { notice('この端末では録音が使えません。'); return; }
   if (!chosen.length) { notice('先に文字をえらんでね。'); return; }
   stopAll();
-  const target = chosen.join('').toLowerCase();
-  let got = false;
-  const r = new SR();
-  sayRec = r; r.lang = 'en-US'; r.interimResults = false; r.maxAlternatives = 5; r.continuous = false;
-  r.onstart = () => { listening = true; recUI(); showSay('', '🎧 聞いています…', '', '「' + target + '」と言ってみよう'); };
-  r.onresult = e => {
-    got = true;
-    const alts = Array.from(e.results[0]).map(a => a.transcript.trim().toLowerCase().replace(/[^a-z' ]/g, ''));
-    const hit = alts.some(a => a.replace(/\s/g, '') === target);
-    if (hit) showSay('ok', '✨ 聞き取れたよ！', target, '「' + target + '」と、ちゃんと伝わったよ');
-    else showSay('', '聞き取れたのは、こちらだったよ', alts[0] || '…', 'おてほんをもう一度聞いて、「' + target + '」を言ってみよう');
+  let st;
+  try { st = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { notice(e && e.name === 'NotAllowedError' ? 'マイクが許可されていません。アドレスバーのマイクの設定から、許可してね。' : '録音を始められませんでした。マイクがつながっているか確かめてね。'); return; }
+  recTarget = chosen.join('').toLowerCase(); srOut = null; recDone = false; srDone = true;
+  const chunks = [];
+  recorder = new MediaRecorder(st);
+  recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  recorder.onstop = () => {
+    st.getTracks().forEach(t => t.stop());
+    recording = false; recDone = true;
+    if (chunks.length) { if (recUrl) URL.revokeObjectURL(recUrl); recUrl = URL.createObjectURL(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })); }
+    recUI(); maybeShow();
   };
-  r.onerror = e => {
-    got = true;
-    const m = { 'not-allowed': 'マイクが許可されていません。アドレスバーのマイクの設定から、許可してね。', 'service-not-allowed': 'この画面では、文字おこしが使えません。', 'no-speech': '声が聞こえなかったよ。もう一度、少し大きな声で言ってみよう。', 'network': 'インターネットにつながっていないので、文字おこしができません。', 'audio-capture': 'マイクがつながっているか、確かめてね。' };
-    showSay('', m[e.error] || 'うまく聞き取れませんでした。もう一度やってみよう。', '', '');
-  };
-  r.onend = () => { listening = false; recUI(); if (!got) showSay('', '声が聞こえなかったよ。もう一度、言ってみよう。', '', ''); };
-  try { r.start(); } catch (e) { listening = false; recUI(); notice('文字おこしを始められませんでした。'); }
+  recorder.start(); recording = true; recUI();
+  showSay('', '🎧 聞いています…', '', '');
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR) {
+    try {
+      const r = new SR(); sayRec = r; srDone = false; srOut = { alts: [] };
+      r.lang = 'en-US'; r.interimResults = false; r.maxAlternatives = 5; r.continuous = false;
+      r.onresult = e => { srOut = { alts: Array.from(e.results[0]).map(a => a.transcript.trim().toLowerCase().replace(/[^a-z' ]/g, '')) }; };
+      r.onerror = e => { if (e.error !== 'aborted') srOut = { err: e.error }; };
+      r.onend = () => { srDone = true; try { recorder.state !== 'inactive' && recorder.stop(); } catch (e) {} maybeShow(); };
+      r.start();
+    } catch (e) { srDone = true; srOut = null; }
+  }
+  recTimer = setTimeout(stopRec, 8000);
 }
-$('btnSay').addEventListener('click', sayTest);
+$('btnRec').addEventListener('click', toggleRec);
 
 /* ===== 起動 ===== */
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { tileSet = t.dataset.set; store.set('sb.set', tileSet); render(); }));
