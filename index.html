@@ -52,6 +52,7 @@
 
 * { box-sizing: border-box; }
 body {
+  margin: 0;
   background: var(--bg); color: var(--fg);
   font-family: var(--font-ui); font-size: 16px; line-height: 1.6;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
@@ -176,9 +177,37 @@ h1, h2, h3, p { margin: 0; }
   .detail .big { font-size: 64px; }
   .challenge .btns { margin-left: 0; }
 }
+
+/* トーストは画面の上に重ねて表示（レイアウトを押し下げない） */
+#toast { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 30; max-width: min(92vw, 640px); box-shadow: 0 6px 20px var(--shadow); }
+
+/* 横長の画面（PC・Chromebook）では、スクロールなしで1画面に収める：左に作成エリア、右に文字タイル */
+@media (min-width: 900px) and (min-height: 540px) {
+  body { padding-block: 10px; }
+  .wrap.app { max-width: 1400px; height: calc(100dvh - 20px); gap: 10px; }
+  .top h1 { font-size: 22px; line-height: 1.2; }
+  .wrap.app > main { flex: 1 1 auto; min-height: 0; display: flex; }
+  #vBuild { width: 100%; max-width: none; margin: 0; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 20px; flex: 1 1 auto; min-height: 0; }
+  .colL { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
+  .colR { min-height: 0; overflow: auto; gap: 10px; }
+  .stage { flex: 1 1 auto; min-height: 120px; padding: 12px; }
+  .slot { font-size: clamp(34px, 10vh, 76px); padding: 10px 16px 14px; min-width: 64px; }
+  .btn { min-height: 46px; padding: 8px 18px; font-size: 16px; }
+  .actions { gap: 8px; }
+  .sayres { padding: 10px 14px; }
+  .sayres .big { font-size: 32px; }
+  .fb { padding: 10px 14px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(clamp(48px, 8vh, 78px), 1fr)); gap: 8px; }
+  .tile { font-size: clamp(20px, 4vh, 34px); min-height: clamp(42px, 8vh, 72px); padding: 6px 4px; border-radius: 14px; }
+  .sect h3 { margin-bottom: 4px; font-size: 13px; }
+  .shelf { gap: 10px; }
+  .wrap.app > footer { flex: 0 0 auto; }
+  .credit p { position: absolute; bottom: 36px; background: var(--surface); border: 2px solid var(--line); border-radius: 14px; padding: 10px 14px; box-shadow: 0 6px 20px var(--shadow); max-width: 46em; }
+  .credit { position: relative; }
+}
 </style>
 
-<div class="wrap">
+<div class="wrap app">
   <header class="top">
     <h1>Sound Builder</h1>
   </header>
@@ -187,6 +216,7 @@ h1, h2, h3, p { margin: 0; }
   <main>
     <!-- 単語づくり（自由・お題 共通） -->
     <section id="vBuild" class="wrap">
+      <div class="colL">
       <div class="stage"><div class="slots" id="slots" aria-live="polite"></div></div>
 
       <div class="actions">
@@ -194,16 +224,14 @@ h1, h2, h3, p { margin: 0; }
         <button class="btn sound" type="button" id="btnRead">🔊 ことばを読む</button>
         <button class="btn" type="button" id="btnUndo">1つ消す</button>
         <button class="btn" type="button" id="btnClear">やり直す</button>
-      </div>
-
-      <div class="actions rec">
         <button class="btn" type="button" id="btnRec">🎙 録音する</button>
       </div>
       <div class="sayres" id="sayRes" role="status" aria-live="polite" hidden></div>
 
       <div class="fb" id="fb" role="status" aria-live="polite"></div>
+      </div>
 
-      <div class="shelf">
+      <div class="shelf colR">
         <div class="tabs" role="tablist" aria-label="文字の選び方">
           <button class="tab" role="tab" type="button" data-set="letters" aria-selected="false">1文字ずつ</button>
           <button class="tab" role="tab" type="button" data-set="chunks" aria-selected="false">文字のまとまり</button>
