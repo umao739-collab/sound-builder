@@ -205,6 +205,20 @@ h1, h2, h3, p { margin: 0; }
   .credit p { position: absolute; bottom: 36px; background: var(--surface); border: 2px solid var(--line); border-radius: 14px; padding: 10px 14px; box-shadow: 0 6px 20px var(--shadow); max-width: 46em; }
   .credit { position: relative; }
 }
+
+/* 広い画面（幅1200px以上）では、文字タイルを下に横長に並べる（キーボードのような配置） */
+@media (min-width: 1200px) and (min-height: 540px) {
+  #vBuild { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 12px; }
+  .colR { overflow: visible; }
+  .stage { min-height: 140px; }
+  #shelfBuild { display: flex; gap: 16px; justify-content: center; align-items: flex-start; }
+  #shelfBuild .sL { width: calc((100% - 16px) * 13 / 24); }
+  #shelfBuild .sC { width: calc((100% - 16px) * 11 / 24); }
+  #shelfBuild .sL .grid { grid-template-columns: repeat(13, 1fr); }
+  #shelfBuild .sC .grid { grid-template-columns: repeat(11, 1fr); }
+  .tile { min-height: clamp(40px, 7.4vh, 62px); font-size: clamp(18px, 3.4vh, 28px); }
+  .legend { justify-content: center; }
+}
 </style>
 
 <div class="wrap app">
@@ -434,7 +448,7 @@ function tileBtn(t, onclick, extra) {
 function shelf(host, onclick, sets, selected) {
   host.innerHTML = '';
   const add = (title, arr) => {
-    const sec = document.createElement('div'); sec.className = 'sect';
+    const sec = document.createElement('div'); sec.className = 'sect ' + (arr === LETTERS ? 'sL' : 'sC');
     const h = document.createElement('h3'); h.textContent = title; sec.appendChild(h);
     const g = document.createElement('div'); g.className = 'grid';
     arr.forEach(t => g.appendChild(tileBtn(t, onclick, selected === t ? 'sel' : '')));
