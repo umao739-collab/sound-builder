@@ -181,11 +181,6 @@ h1, h2, h3, p { margin: 0; }
 <div class="wrap">
   <header class="top">
     <h1>Sound Builder</h1>
-    <span class="sp"></span>
-    <span class="badge" id="bankBadge">音声素材 0 / 0</span>
-    <label class="voice" for="voiceSel">英語の声
-      <select id="voiceSel"><option value="">自動</option></select>
-    </label>
   </header>
 
   <div class="fb" id="toast" role="alert"></div>
@@ -367,15 +362,9 @@ let voices = [];
 function loadVoices() {
   if (!('speechSynthesis' in window)) return;
   voices = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
-  const sel = $('voiceSel'), keep = store.get('sb.voice') || '';
-  sel.innerHTML = '<option value="">自動</option>';
-  voices.forEach(v => { const o = document.createElement('option'); o.value = v.name; o.textContent = v.name + '（' + v.lang + '）'; sel.appendChild(o); });
-  sel.value = keep;
-  if (sel.value !== keep) sel.value = '';
 }
 function pickVoice() {
-  const name = $('voiceSel').value;
-  return voices.find(v => v.name === name) || voices.find(v => /en[-_]US/i.test(v.lang)) || voices[0] || null;
+  return voices.find(v => /en[-_]US/i.test(v.lang)) || voices[0] || null;
 }
 function speak(text) {
   if (busy) return;
@@ -446,10 +435,6 @@ function renderSlots() {
   });
 }
 function render() {
-  const n = REQUIRED_IDS.filter(has).length;
-  const bd = $('bankBadge');
-  bd.textContent = '音声素材 ' + n + ' / ' + REQUIRED_IDS.length;
-  bd.className = 'badge' + (n === REQUIRED_IDS.length ? ' ready' : '');
   if (view === 'free') {
     document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.set === tileSet)));
     shelf($('shelfBuild'), onTile, tileSet, null);
@@ -585,7 +570,6 @@ $('btnRec').addEventListener('click', toggleRec);
 /* ===== 起動 ===== */
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { tileSet = t.dataset.set; store.set('sb.set', tileSet); render(); }));
 $('tapSound').addEventListener('change', e => store.set('sb.tap', e.target.checked ? '1' : '0'));
-$('voiceSel').addEventListener('change', e => store.set('sb.voice', e.target.value));
 (function init() {
   const s = store.get('sb.set'); if (['letters', 'chunks', 'both'].includes(s)) tileSet = s;
   if (store.get('sb.tap') === '0') $('tapSound').checked = false;
