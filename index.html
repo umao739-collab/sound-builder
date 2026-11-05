@@ -501,8 +501,8 @@ async function slotSound(i) {
   if (!has(id)) { say('info', 'この音の素材はまだ入っていません。'); return; }
   await playIds([id]);
 }
-/* 文字の「名前」（エー・ビー…）を、端末の英語音声で言う。つづりを直接読ませると誤読があるため、読みを文字で指定する */
-const LETTER_NAME = { a: 'ay', b: 'bee', c: 'see', d: 'dee', e: 'ee', f: 'eff', g: 'jee', h: 'aitch', i: 'eye', j: 'jay', k: 'kay', l: 'el', m: 'em', n: 'en', o: 'oh', p: 'pee', q: 'cue', r: 'ar', s: 'ess', t: 'tee', u: 'you', v: 'vee', w: 'double you', x: 'ex', y: 'why', z: 'zee' };
+/* 文字の「名前」（エー・ビー…）を、端末の英語音声で言う。大文字1字を読ませる（読み違いがある文字は、ここで個別に直せる） */
+const LETTER_NAME = { a: 'A', b: 'B', c: 'C', d: 'D', e: 'E', f: 'F', g: 'G', h: 'H', i: 'I', j: 'J', k: 'K', l: 'L', m: 'M', n: 'N', o: 'O', p: 'P', q: 'Q', r: 'R', s: 'S', t: 'T', u: 'U', v: 'V', w: 'W', x: 'X', y: 'Y', z: 'Z' };
 function speakName(text) {
   return new Promise(res => {
     if (!('speechSynthesis' in window)) { res(); return; }
