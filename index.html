@@ -501,11 +501,41 @@ async function slotSound(i) {
   if (!has(id)) { say('info', 'この音の素材はまだ入っていません。'); return; }
   await playIds([id]);
 }
+/* 文字の「名前」（エー・ビー…）を、端末の英語音声で言う。つづりを直接読ませると誤読があるため、読みを文字で指定する */
+const LETTER_NAME = { a: 'ay', b: 'bee', c: 'see', d: 'dee', e: 'ee', f: 'eff', g: 'jee', h: 'aitch', i: 'eye', j: 'jay', k: 'kay', l: 'el', m: 'em', n: 'en', o: 'oh', p: 'pee', q: 'cue', r: 'ar', s: 'ess', t: 'tee', u: 'you', v: 'vee', w: 'double you', x: 'ex', y: 'why', z: 'zee' };
+function speakName(text) {
+  return new Promise(res => {
+    if (!('speechSynthesis' in window)) { res(); return; }
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text), v = pickVoice();
+      if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'en-US'; }
+      u.rate = 0.9;
+      let done = false; const fin = () => { if (!done) { done = true; res(); } };
+      u.onend = fin; u.onerror = fin;
+      setTimeout(fin, 2500);
+      speechSynthesis.speak(u);
+    } catch (e) { res(); }
+  });
+}
+async function nameThenSound(t) {
+  if (recording) return;
+  const my = ++token;
+  setBusy(true);
+  await speakName(LETTER_NAME[t]);
+  if (my !== token) return;
+  setBusy(false);
+  const id = soundOf(t);
+  if (id && has(id)) await playIds([id]);
+}
 async function onTile(t, btn) {
   stopAll();
   chosen.push(t); cv.push(0); renderSlots(); autoCheck();
   if (AMBIG[t]) { const id = AMBIG[t][0]; if ($('tapSound').checked && has(id)) playIds([id]); return; }
-  if ($('tapSound').checked) { const id = soundOf(t); if (id && has(id)) playIds([id]); }
+  if ($('tapSound').checked) {
+    if (LETTER_NAME[t]) { nameThenSound(t); return; }
+    const id = soundOf(t); if (id && has(id)) playIds([id]);
+  }
 }
 $('btnSeq').addEventListener('click', async () => {
   if (!chosen.length) { say('info', '先に文字をえらんでね。'); return; }
